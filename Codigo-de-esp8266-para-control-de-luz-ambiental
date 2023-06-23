@@ -1,0 +1,90 @@
+//Módulo Emisor de Datos (Sensor de luz):
+#include <ESP8266WiFi.h> // Se incluyen las bibliotecas ESP8266WiFi.h
+#include <Wire.h> // Biblioteca
+const char* ssid = "Nombre_de_Red_WiFi"; 
+const char* password = "Contraseña_de_Red_WiFi";
+// variables con credenciales de red WiFi
+const int sensorPin = A0; // es una entrada analogica
+void setup() { //inicia comunicación serial con una velocidad de 115200 baudios
+  Serial.begin(115200);
+  WiFi.begin(ssid, password); // aqui va el nombre de la red y una contraseña
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(1000);
+    Serial.println("Conectando a la red WiFi..."); // Indica si se establece una conexión
+  }
+  Serial.println("Conexión WiFi establecida"); // conexión exitosa
+}
+void loop() { //
+  int sensorValue = analogRead(sensorPin);
+  WiFiClient client;
+  const int httpPort = 80;
+  if (!client.connect("IP_del_Modulo_Receptor", httpPort)) {
+    Serial.println("Error de conexión");
+    return;
+  }
+  String url = "/recepcion_datos.php?nivel_luz=" + String(sensorValue);
+  client.print(String("GET ") + url + " HTTP/1.1\r\n" +
+               "Host: IP_del_Modulo_Receptor\r\n" +
+               "Connection: close\r\n\r\n");
+  delay(100);
+  while (client.available()) {
+    String line = client.readStringUntil('\r');
+    Serial.print(line);
+  }
+  client.stop();
+  delay(5000);
+}
+
+
+
+
+
+
+
+
+
+//Módulo Receptor (Controlador de luces LED):
+#include <ESP8266WiFi.h>
+#include <Wire.h>
+const char* ssid = "Nombre_de_Red_WiFi";
+const char* password = "Contraseña_de_Red_WiFi";
+const int ledPin = D0;
+void setup() {
+  Serial.begin(115200);
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(1000);
+    Serial.println("Conectando a la red WiFi...");
+  }
+  Serial.println("Conexión WiFi establecida");
+  pinMode(ledPin, OUTPUT);
+}
+void loop() {
+  WiFiClient client;
+  const int httpPort = 80;
+  if (!client.connect("IP_del_Modulo_Emisor", httpPort)) {
+    Serial.println("Error de conexión");
+    return;
+  }
+  client.print(String("GET /datos_luz.php HTTP/1.1\r\n") +
+               "Host: IP_del_Modulo_Emisor\r\n" +
+               "Connection: close\r\n\r\n");
+  delay(100);
+  String response = "";
+  while (client.available()) {
+    String line = client.readStringUntil('\r');
+    response += line;
+  }
+  if (response != "") {
+    int nivelLuz = response.toInt();
+    if (nivelLuz < 500) {
+      digitalWrite(ledPin, HIGH);
+    } else {
+      digitalWrite(ledPin, LOW);
+    }
+    Serial.print("Nivel de luz recibido: ");
+    Serial.println(nivelLuz);
+  }
+  client.stop();
+  delay(5000);
+}
